@@ -3,8 +3,12 @@
 
 #include <stdint.h>
 
-#define TIMEOUT_UI	50
-#define TIMEOUT_SWAP_STATE 40
+#define TIMEOUT_UI	500
+#define TIMEOUT_LCD 500
+#define TIMEOUT_SWAP_STATE 400
+#define TIMEOUT_RUN_SYSTEM 250
+#define TIMEOUT_INCREASE_STEP_RUN_MOTOR 15
+
 
 extern uint8_t RxData;
 
@@ -21,5 +25,9 @@ extern uint16_t Timeout5sLCD; // Timeout kiểm tra tín hiệu LCD
 
 extern uint16_t Timeout5sUI; // cho kiểm tra tín hiệu UI
 extern uint16_t TimeoutSwapState; // cho để swap state
+
+extern uint16_t TimeoutRunSystem;	// Thời gian để kiểm tra hệ thống
+extern uint16_t TimeoutIncreaseStepRunMotor; // Thời gian để chạy động cơ tăng dần
+extern uint8_t  StepRunSystem;      // Các bước chạy hệ thống 
 
 #endif

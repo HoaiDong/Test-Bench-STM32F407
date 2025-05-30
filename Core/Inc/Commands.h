@@ -26,6 +26,7 @@ void CommLCDDetectSensor(void);
 void CommLCDFaultCode(uint16_t FaultMask);
 void CommLCDThrottle(uint32_t ThrottleValue);
 
+void CommLCDUIConnectionStatus(uint8_t Status);
 
 
 #endif

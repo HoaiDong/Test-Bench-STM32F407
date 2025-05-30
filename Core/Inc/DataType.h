@@ -19,6 +19,9 @@
 
 #define FLASH_SECTOR11_ADDR		0X080E0000
 
+#define MIN_DAC_MOTOR 620
+#define MAX_DAC_MOTOR 4095
+
 extern ADC_HandleTypeDef hadc1;
 extern ADC_HandleTypeDef hadc2;
 extern DMA_HandleTypeDef hdma_adc1;
@@ -76,7 +79,10 @@ typedef enum _CommLCD
     COMM_LCD_LOAD,               // ID CAN truyền thông tin về tải của hệ thống
     COMM_LCD_DETECT_SENSOR,      // ID CAN truyền tín hiệu khi phát hiện cảm biến hoặc nhận dữ liệu từ cảm biến
     COMM_LCD_FAULT_CODE,         // ID CAN truyền mã lỗi nếu có sự cố xảy ra
-    COMM_LCD_THROTTLE            // ID CAN truyền thông tin về giá trị tay ga 
+    COMM_LCD_THROTTLE,          // ID CAN truyền thông tin về giá trị tay ga
+	COMM_LCD_UI_CONNECTION_STATUS,  // ID CAN truyền trạng thái kết nối giao diện người dùng
+    COMM_LCD_TEST_SYSTEM         // ID CAN dùng để kiểm tra hệ thống
+
 
 }CommLCD;
 

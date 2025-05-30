@@ -13,7 +13,8 @@ typedef enum  _SWITCH_STATUS
 // Định nghĩa mức tải 
 typedef enum _LOAD_LEVEL 
 {
-    LOAD_1 = 1,
+    LOAD_0 = 0,
+    LOAD_1,
     LOAD_2,
     LOAD_3,
     LOAD_4
@@ -42,10 +43,14 @@ extern float Speed_RPM;  // Giá trị đọc từ cảm biến tốc độ vòn
 extern uint32_t last_capture_tick;  // Thoi gian timeout de check toc do bang 0
 
 
+extern uint16_t Torque_Value;
+extern float	Votol_Voltage;
+extern float	Generator_Voltage;
+extern float 	Votol_Current;
+extern float	Generator_Current;
 
 
-
-
+extern uint16_t DAC_Motor_Value;
 
 
 // Lấy giá trị offset của các cảm biến 
@@ -57,7 +62,8 @@ void ReadSensor(void);
 //Ham check toc do bang 0
 void check_motor_timeout();
 
-
+// Hàm khởi tạo bộ lọc
+void InitFilter(void);
 
 
 
