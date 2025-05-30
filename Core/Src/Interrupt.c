@@ -17,10 +17,15 @@ uint8_t Timer500MsFlag = 0;
 uint8_t TimerCheckErrorFlag = 0; // Timer kiểm tra lỗi toàn hệ thống theo chu kỳ
 
 uint16_t Timeout5s = 50;
-uint16_t Timeout5sUI = 50; // chờ kiểm tra tín hiệu UI
-uint16_t TimeoutSwapState = 80; // chờ 5s để Swap State
+uint16_t Timeout5sUI = TIMEOUT_UI; // chờ kiểm tra tín hiệu UI
+uint16_t Timeout5sLCD = TIMEOUT_LCD; // Timeout kiểm tra tín hiệu LCD
+uint16_t TimeoutSwapState = TIMEOUT_SWAP_STATE; // chờ 5s để Swap State
 
-uint16_t Timeout5sLCD = 50; // Timeout kiểm tra tín hiệu LCD 
+uint16_t TimeoutRunSystem = TIMEOUT_RUN_SYSTEM;
+uint16_t TimeoutIncreaseStepRunMotor = TIMEOUT_INCREASE_STEP_RUN_MOTOR; // Thời gian để chạy động cơ tăng dần
+uint8_t  StepRunSystem = 1;
+
+
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
@@ -41,7 +46,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART2)
     {
-        // Xử lý dữ liệu từ RxBuffer
+        // Nhận 1 data từ UART
         EnqueueBuffer(RxData);
 
         // Khởi động lại chế độ nhận để nhận byte tiếp theo
@@ -59,70 +64,48 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 	if (RxHeader.StdId == COMM_LCD_CONNECT_ALIVE)
 	{
-		// LCDConnectAlive = LCD_STATUS_ALIVE;
-		// // OverallCount = 50;
-
 		LCDConnectionStatus = CONNECTED;
-		Timeout5sLCD = 50;
+		Timeout5sLCD = TIMEOUT_LCD;
 	}
 
+	if (RxHeader.StdId == COMM_LCD_TEST_SYSTEM)
+	{
+		StepRunSystem = 1;
+		FaultMask = FAULT_NONE;
 
-
-
-
-	// if (RxHeader.StdId == COMM_LCD_CONNECT)
-	// {
-    //     LCDConnectAlive = 50;
-	// }
-
+		DACSpeedSensorReference1 = INVALID_REFERENCE;
+		DACSpeedSensorReference2 = INVALID_REFERENCE;
+	}
 }
 
-// Timer 100ms
+// Timer 10ms
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) 
 {
     if (htim->Instance == TIM6) 
     {
 
 
-		Timer100msFlag = 1;
+
+//		Timer100msFlag = 1;
+
+
+
+
 
 		static uint8_t TimerCount = 0;
 		TimerCount++;
+
+		if (TimerCount % 5 == 0)
+		{
+			Timer100msFlag = 1;
+
+		}
+
 		if (TimerCount % 30 == 0)
 		{
 			TimerCheckErrorFlag = 1; // Timer kiểm tra lỗi toàn hệ thống theo chu kỳ
 			TimerCount = 0;
 		}
-
-		// static uint8_t TimerCount = 0;
-		// TimerCount++;
-
-		// 100ms
-		// if (TimerCount % 1 == 0)
-		// {
-		// 	// Timer10MsFlag = 1;
-		// 	Timer100msFlag = 1;
-		// 	TimerCount = 0;
-		// }
-
-		// // 50ms
-		// if (TimerCount % 5 == 0)
-		// {
-		// 	Timer50MsFlag = 1;
-		// }
-
-		// // 100ms
-		// if (TimerCount % 10 == 0)
-		// {
-		// 	Timer100msFlag = 1;
-		// }
-
-		// // 500ms
-		// if (TimerCount % 50 == 0)
-		// {
-		// 	Timer500MsFlag = 1;
-		// 	TimerCount = 0;
-		// }
 
 		
 		// Timeout 5s cho LCD
@@ -137,11 +120,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			Timeout5sUI--;
 		}
 
-		// Timeout 5s cho swap state
+		// Timeout cho swap state
 		if (TimeoutSwapState)
 		{
 			TimeoutSwapState--;
 		}
+
+		
+		// Timeout cho running system
+		if (TimeoutRunSystem)
+		{
+			TimeoutRunSystem--;
+		}
+
+		// Timeout để tăng step để chạy motor tăng tốc dần
+		if (TimeoutIncreaseStepRunMotor)
+		{
+			TimeoutIncreaseStepRunMotor--;
+		}
+
     }
 
 
@@ -220,7 +217,10 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 			uint32_t frequency = 1000000/Difference;
 		
-			Speed_RPM = ((float)frequency/Speed_Disc_Tooth) * 60;
+			if (  ((float)frequency/Speed_Disc_Tooth) * 60 < 1000  )
+			{
+				Speed_RPM = ((float)frequency/Speed_Disc_Tooth) * 60;
+			}
 
 			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
 			Is_First_Captured = 0; // set it back to false

@@ -2,6 +2,9 @@
 #include "Interrupt.h"
 #include "Commands.h"
 #include "Error.h"
+#include "DataType.h"
+#include "Utility.h"
+#include "Packet.h"
 
 // Điều khiển mô hình 
 static void SystemControl(void);
@@ -10,6 +13,8 @@ static void SystemControl(void);
 static void LCDCommunication(void);
 
 
+
+//=================================================================================================
 void FaultState(StateMachine CurrentStateMachine)
 {
     while (1)
@@ -20,7 +25,13 @@ void FaultState(StateMachine CurrentStateMachine)
         // Giao tiếp với LCD
         LCDCommunication();
 
-        CheckOverrall(); // Kiểm tra hệ thống theo chu kì, cập nhật biến "FaultMask"
+		// Bật đèn led đỏ để cảnh báo
+        AlarmLed(LED_YELLOW);
+
+		// Kiểm tra hệ thống theo chu kì, cập nhật biến "FaultMask"
+        CheckOverrall(); 
+
+        TryDecodePacket();
 
     }
     
@@ -30,21 +41,8 @@ void FaultState(StateMachine CurrentStateMachine)
 static void SystemControl(void)
 {
 
-    // Điều khiển tay ga
-	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 620);
-
-
-    // Công tắt bật tải
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_RESET);
-
-
-    // Công tắt mức tải
-   // Mức tải 1
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-
+	SetMotor(MIN_DAC_MOTOR);	// Tắt mô tơ
+	SetLoad(LOAD_0);			// Tắt tải
 
 }
 
@@ -55,10 +53,13 @@ static void LCDCommunication(void)
     if (Timer100msFlag)
     {
         CommLCDConnectAlive();
-        CommLCDStateMachine(FAULT_STATE);
         CommLCDFaultCode(FaultMask);
+        CommLCDStateMachine(FAULT_STATE);
 
         Timer100msFlag = 0;
     }
 }
+
+//=======================================================================================
+
 

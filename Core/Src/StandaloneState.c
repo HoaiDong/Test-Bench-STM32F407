@@ -4,6 +4,9 @@
 #include "Error.h"
 #include "Sensor.h"
 #include "Packet.h"
+#include "Utility.h"
+
+
 
 
 // FUNCTION PROTOTYPE 
@@ -35,7 +38,10 @@ void StandaloneState(StateMachine *CurrentStateMachine)
     {
         // Đọc cảm biến
         ReadSensor();
+
         
+
+
         // Điều khiển mô hình
         SystemControl();
 
@@ -50,6 +56,9 @@ void StandaloneState(StateMachine *CurrentStateMachine)
         {
             Timer100msFlag = 0;
         }
+
+        // Bật đèn báo màu xanh lá 
+        AlarmLed(LED_GREEN);
 
         // Nếu nhận được tín hiệu kết nối từ UI thì chuyển về trạng thái UI 
         if (UIConnectionStatus == CONNECTED)
@@ -88,12 +97,9 @@ static void LCDCommunication(void)
     {
         CommLCDConnectAlive();                              // Gửi tín hiệu alive to LCD để xác nhận kết nối
         CommLCDStateMachine(STANDALONE_STATE);              // Gửi state machine 
-        CommLCDRPMAndTorque(Speed_RPM, Torque_ADC * (float)3000 / 4096 / Torque_Sensitive);         // Gửi giá trị tốc độ bánh xe và mômen
-        CommLCDCurrent(Cur_Votol_ADC * (float)3000 / 4096 / Cur_Sensitive, Cur_Generator_ADC * (float)3000 / 4096 / Cur_Sensitive);   // Gửi giá trị dòng điện votol và dòng điện máy phát
-        CommLCDVoltage((float)Vol_Votol_ADC * 3 / 4095 * 209.9/9.9, (float)Vol_Generator_ADC * 3 / 4095 * 209.9/9.9);   // Gửi giá trị điện áp votol và điện áp máy phát
-
-
-        // CommLCDLoad(Load_On_Off_Signal, Load_Level_Signal); // Gửi giá trị on/off tải và mức tải
+        CommLCDRPMAndTorque(Speed_RPM, Torque_Value);         // Gửi giá trị tốc độ bánh xe và mômen
+        CommLCDCurrent(Votol_Current*100, Generator_Current*100);   // Gửi giá trị dòng điện votol và dòng điện máy phát
+        CommLCDVoltage(Votol_Voltage*100, Generator_Voltage*100);   // Gửi giá trị điện áp votol và điện áp máy phát
     }
 
 }
@@ -106,12 +112,9 @@ static void UICommunication(void)
 
 static void UIReceive(void)
 {
-    if (Count > 0)
+    if (TryDecodePacket() == 1)
     {
-        if (TryDecodePacket() == 1)
-        {
-            ProcessPacket();
-        }
+        ProcessPacket();
     }
 }
 
@@ -136,55 +139,7 @@ static void ProcessPacket(void)
 // Điều khiển mô hình 
 static void SystemControl(void)
 {
-
-    // Điều khiển tay ga 
-    if (Throttle_ADC <= 2978)
-    {
-        HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, adc1_buffer[0] + 620);
-    }
-
-    // Công tắt bật tải 
-    if (Load_On_Off_Signal == SWITCH_ON)
-    {
-        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_SET);
-    }
-    else
-	{
-		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_RESET);
-	}
-
-
-    // Công tắt mức tải 
-    switch (Load_Level_Signal)
-    {
-        case LOAD_1:    // Mức tải 1 
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-        break;
-    
-        case LOAD_2:    // Mức tải 2
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-        break;
-
-        case LOAD_3:    // Mức tải 3 
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-        break;
-
-        case LOAD_4:    // Mức tải 4 
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
-        break;
-    }
-
+    SetMotor(DAC_Motor_Value);  // Điều khiển motor 
+    SetLoad(Load_Level_Signal); // Điều khiển tải 
 }
 //========================================================================================

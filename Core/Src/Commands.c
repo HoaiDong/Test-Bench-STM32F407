@@ -4,6 +4,7 @@
 #include "Sensor.h"
 #include <stdlib.h>
 #include <string.h>
+#include "Interrupt.h"
 
 
 // FUNCTION PROTOTYPE
@@ -52,11 +53,12 @@ void CommUIRealtimeData(void)
 {
     //Biến đổi các giá trị cảm biến thành số thực
     uint32_t RPM  = BigToLittleEdian((float)Speed_RPM * 1000);
-    uint32_t Torque = BigToLittleEdian((float)Torque_ADC * 3000 / 4095 / 2.34 * 1000);                        // 2.34 mV/Nm is the sensitivity of the sensor
-    uint32_t Vol_Votol = BigToLittleEdian((float)Vol_Votol_ADC * 3 / 4095 * 209.6/9.6 * 1000);               // 200k/10k voltage divider;
-    uint32_t Vol_Generator = BigToLittleEdian((float)Vol_Generator_ADC * 3 / 4095 * 209.9/9.9 * 1000);       // 200k/10k voltage divider;
-    uint32_t Cur_Votol = BigToLittleEdian(((float)Cur_Votol_ADC - 2252) * 3000 / 4095 / 50.3 * 1000);         //50.3mV/A is the sensitivity of the sensor, 2358 is the offset
-    uint32_t Cur_Generator = BigToLittleEdian(((float)Cur_Generator_ADC - 2252) * 3000 / 4095 / 50.3 * 1000); //50.3mV/A is the sensitivity of the sensor, 2358 is the offset
+    uint32_t Torque = BigToLittleEdian((float)Torque_Value * 1000);                        // 2.34 mV/Nm is the sensitivity of the sensor
+    uint32_t Vol_Votol = BigToLittleEdian((float)Votol_Voltage * 1000);               // 200k/10k voltage divider;
+    uint32_t Vol_Generator = BigToLittleEdian((float)Generator_Voltage * 1000);       // 200k/10k voltage divider;
+    uint32_t Cur_Votol = BigToLittleEdian((float)Votol_Current * 1000);         //50.3mV/A is the sensitivity of the sensor, 2358 is the offset
+    uint32_t Cur_Generator = BigToLittleEdian((float)Generator_Current* 1000); //50.3mV/A is the sensitivity of the sensor, 2358 is the offset
+
 
     //cấp phát động
     uint8_t* data = (uint8_t*) malloc(25);
@@ -155,6 +157,11 @@ void CommLCDStateMachine(uint8_t CurrentStateMachine)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
     // Gửi dữ liệu qua CAN1
@@ -198,6 +205,11 @@ void CommLCDConnectAlive(void)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+//         Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
     // Gửi dữ liệu qua CAN1
@@ -206,7 +218,7 @@ void CommLCDConnectAlive(void)
         if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, &data, &TxMailbox) != HAL_OK)
         {
             // Xử lý lỗi nếu gửi thất bại
-            Error_Handler();
+//            Error_Handler();
         }
 //    }
 }
@@ -233,6 +245,11 @@ void CommLCDRPMAndTorque(uint16_t SpeedRPM, uint32_t TorqueValue)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
 
@@ -271,6 +288,11 @@ void CommLCDVoltage(uint32_t VolVotolValue, uint32_t VolGeneratorValue)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
 
@@ -309,6 +331,11 @@ void CommLCDCurrent(uint32_t CurrentVotolValue, uint32_t CurrentGenneratorValue)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
 
@@ -337,6 +364,11 @@ void CommLCDLoad(uint8_t LoadOnOff, uint8_t LoadLevel)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
     // Gửi dữ liệu qua CAN1
@@ -384,17 +416,22 @@ void CommLCDFaultCode(uint16_t FaultMask)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
     // Gửi dữ liệu qua CAN1
-//    if ((HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)) > 0)  // Kiểm tra mailbox trôngs để gửi data
-//    {
+    if ((HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)) > 0)  // Kiểm tra mailbox trôngs để gửi data
+    {
         if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, data, &TxMailbox) != HAL_OK)
         {
             // Xử lý lỗi nếu gửi thất bại
             Error_Handler();
         }
-//    }
+    }
 }
 
 // Gửi giá trị tay ga qua CAN 
@@ -416,6 +453,11 @@ void CommLCDThrottle(uint32_t ThrottleValue)
     while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
     {
         // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
     }
 
     // Gửi dữ liệu qua CAN1
@@ -427,5 +469,36 @@ void CommLCDThrottle(uint32_t ThrottleValue)
             Error_Handler();
         }
 //    }
+}
+
+void CommLCDUIConnectionStatus(uint8_t Status)
+{
+    CAN_TxHeaderTypeDef TxHeader;
+    uint32_t TxMailbox;  // Mailbox để theo dõi trạng thái gửi
+    
+    // Truyền data theo kiểu big endian 
+    uint8_t data = Status;
+
+
+    PacketCANFrame(COMM_LCD_UI_CONNECTION_STATUS, 1, &TxHeader);
+
+    // Đợi đến khi ít nhất 1 mailbox trống
+    while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
+    {
+        // có thể thêm timeout hoặc watchdog ở đây
+        // Nếu quá 5s không có tín hiệu duy trì kết nối LCD thì là lỗi
+        if(!Timeout5sLCD)
+        {
+            return;
+        }
+    }
+
+    // Gửi dữ liệu qua CAN1
+    if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, data, &TxMailbox) != HAL_OK)
+    {
+        // Xử lý lỗi nếu gửi thất bại
+        Error_Handler();
+    }
+
 }
 //========================================================================================

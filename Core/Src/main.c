@@ -26,17 +26,20 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 #include "main.h"
+#include "cmsis_os.h"
 
 #include "Initialization.h"
 #include "StandbyState.h"
 #include "StandaloneState.h"
 #include "UIState.h"
+#include "FaultState.h"
 #include "DataType.h"
 
-extern StateMachine CurrentStateMachine = INITIALIZATION_STATE;		//extern de debug
+extern StateMachine CurrentStateMachine = INITIALIZATION_STATE;
 
 int main(void)
 {
+
 
   while (1)
   {
@@ -60,7 +63,7 @@ int main(void)
       break;
 
       case FAULT_STATE:
-	  FaultState(FAULT_STATE);
+	  FaultState(CurrentStateMachine);
       break;
 
 	  }

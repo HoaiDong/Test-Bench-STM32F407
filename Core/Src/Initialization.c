@@ -5,6 +5,10 @@
 #include "Interrupt.h"
 #include "Error.h"
 #include "Sensor.h"
+#include "Utility.h"
+
+
+
 
 // Khởi tạo các biến toàn cục
 //========================================================================================
@@ -41,6 +45,8 @@ void Error_Handler(void);
 //========================================================================================
 static void SystemInitialization(void);
 static void LCDCommunication(void);
+static void RunSystemForTest(void);
+
 //========================================================================================
 
 
@@ -57,27 +63,50 @@ void InitializationState(StateMachine *CurrentStateMachine)
   // Khởi tạo cho hệ thống (khởi tạo các module, peripheral)
   SystemInitialization();
 
+
   // Lấy giá trị offset của các cảm biến
   GetOffsetSensor();
 
-  TimeoutSwapState = TIMEOUT_SWAP_STATE;  // Sau 8s sẽ chuyển trạng thái
+  // set thời gian để timeout chuyển state
+  TimeoutSwapState = TIMEOUT_SWAP_STATE;
+
+  // Tắt động cơ
+  SetMotor(MIN_DAC_MOTOR); 
+
+
+  // Khởi tạo filter
+  InitFilter();
 
   while (1)
   {
 
-    LCDCommunication(); // Giao tiếp với LCD 
 
-    ReadSensor(); // Đọc cảm biến 
+    // Giao tiếp với LCD
+    LCDCommunication();
+
+    // Lấy giá trị offset của các cảm biến
+    GetOffsetSensor();
+
+    // Đọc cảm biến
+    ReadSensor();
+
+    // Chạy hệ thống để test và lấy offset
+	  RunSystemForTest();
+
 
     CheckOverrall(); // Kiểm tra hệ thống theo chu kì, cập nhật biến "FaultMask"
     // Kiểm tra lỗi hệ thống, nếu có lỗi thì chuyển trạng thái 
     if (FaultMask != FAULT_NONE)
     {
-      *CurrentStateMachine = FAULT_STATE;
-      return;
+      TimeoutSwapState = TIMEOUT_SWAP_STATE;
+      AlarmLed(LED_YELLOW);
+    }
+    else
+    {
+      AlarmLed(LED_GREEN);
     }
 
-    // Time out để chuyển trạng thái 
+    // Time out để chuyển trạng thái
     if (!TimeoutSwapState)
     {
       *CurrentStateMachine = STANDBY_STATE;
@@ -115,7 +144,7 @@ static void SystemInitialization(void)
 
   HAL_Init();
   SystemClock_Config();
-  
+
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_CAN1_Init();
@@ -141,10 +170,60 @@ static void SystemInitialization(void)
 	HAL_UART_Receive_IT(&huart2, &RxData, 1); // Ngắt nhận 1 byte data từ UART
 
 	// Khởi tạo timer
-	HAL_TIM_Base_Start_IT(&htim6);
+  HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim7);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 }
+
+
+// Chạy mô hình để test và lấy thông số
+static void RunSystemForTest(void)
+{
+  switch (StepRunSystem)
+  {
+    case 1:
+    // Tăng tốc động cơ tăng dần để kiểm tra speed sensor 
+    SetLoad(LOAD_0); // Chạy động cơ không tải 
+    RunMotor(&DACSpeedSensorReference1, &ADCCurrentVotolReference1);
+    TimeoutSwapState = TIMEOUT_SWAP_STATE;
+    break;
+
+    case 2:
+    // Tăng tốc động cơ tăng dần để kiểm tra speed sensor 
+    // Chạy động cơ full tải 
+    SetLoad(LOAD_4);
+    RunMotor(&DACSpeedSensorReference2, &ADCCurrentVotolReference2);
+    TimeoutSwapState = TIMEOUT_SWAP_STATE;
+    break;
+
+    case 3:
+    // Tắt động cơ, bật tải, để lấy torque offset lúc không tải
+    SetMotor(MIN_DAC_MOTOR);
+    SetLoad(LOAD_1);
+    TimeoutSwapState = TIMEOUT_SWAP_STATE;
+    break;
+
+    default:
+    // Tắt động cơ, tắt tải, để lấy torque offset lúc không tải
+    SetMotor(MIN_DAC_MOTOR);
+    SetLoad(LOAD_0);
+    break;
+
+  }
+
+
+
+
+  // Time out để chuyển step tiếp theo
+  if (!TimeoutRunSystem)
+  {
+    StepRunSystem ++;
+    TimeoutRunSystem = TIMEOUT_RUN_SYSTEM;
+  }
+
+}
+
+
 //========================================================================================
 
 
@@ -549,7 +628,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
 
   htim6.Init.Period = 4999;       // PSC = 4999 (50MHz -> 10kHz)
-  htim6.Init.Prescaler = 999;     // ARR = 999 (100ms)
+  htim6.Init.Prescaler = 99;     // ARR = 999 (100ms)
   
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -727,6 +806,26 @@ static void MX_GPIO_Init(void)
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 
+
+
+    /* Configure GPIO Output Level */
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10|GPIO_PIN_12, GPIO_PIN_RESET);
+
+    /* Configure GPIO pin : PD1 */
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /* Configure GPIO pins : PC10 PC12 */
+    GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
 }
 
 
@@ -773,7 +872,9 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+
+  sConfigIC.ICFilter = 4; // Lọc input capture 
+
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();

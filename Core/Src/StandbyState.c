@@ -4,6 +4,7 @@
 #include "Commands.h"
 #include "Interrupt.h"
 #include "Sensor.h"
+#include "Utility.h"
 
 //========================================================================================
 // Định nghĩa mô hình đã ở trạng thái an toàn chưa để điều khiển 
@@ -55,6 +56,7 @@ void StandbyState(StateMachine *CurrentStateMachine)
         // Đọc giá trị cảm biến 
         ReadSensor();
         
+        // Trả điều khiển mô hình về trạng thái ban đầu 
         SystemControl();
         
         // Giao tiếp LCD 
@@ -71,14 +73,20 @@ void StandbyState(StateMachine *CurrentStateMachine)
 
 
         // Kiểm tra điều kiện an toàn của hệ thống, nếu không an toàn thì không được phép chuyển trạng thái
-//        if (CheckSafeState() == UN_SAFE)
-//        {
-//            TimeoutSwapState = TIMEOUT_SWAP_STATE;
-//
-//            HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-//            HAL_Delay(100);
-//        }
+        if (CheckSafeState() == UN_SAFE)
+        {
+            // Không được phép chuyển trạng thái, reset lại thời gian timeout 
+            TimeoutSwapState = TIMEOUT_SWAP_STATE;
+
+            AlarmLed(LED_YELLOW);
+        }
+        else
+        {
+        	AlarmLed(LED_GREEN);
+        }
         
+
+
         // Kiểm tra UI có kết nối hay không, để thay đổi trạng thái hệ thống 
         if (UIConnectionStatus == DISCONNECT)
         {
@@ -101,7 +109,7 @@ void StandbyState(StateMachine *CurrentStateMachine)
          // Timeout SwapState là thời gian chờ chuyển trạng thái
          if (!TimeoutSwapState)
          {
-             return;
+            return;
          }
 
     }
@@ -149,11 +157,11 @@ static void ProcessPacket(void)
 // Kiểm tra trạng thái của máy 
 SAFE_STATE CheckSafeState(void)
 {
-//     Chưa trả tay ga về vị trí ban đầu
-//     if (Throttle_ADC >= 100)
-//     {
-//         return UN_SAFE;
-//     }
+     // Chưa trả tay ga về vị trí ban đầu
+     if (Throttle_ADC >= 1000)
+     {
+         return UN_SAFE;
+     }
 
     // Đang bật công tắt tải 
     if (Load_On_Off_Signal == SWITCH_ON)
@@ -163,7 +171,7 @@ SAFE_STATE CheckSafeState(void)
     }
 
     // nếu công tắt mức tải khác mức 1 thì return UN_SAFE
-    if (Load_Level_Signal != LOAD_1)
+    if (Load_Level_Signal > LOAD_1)
     {
         return UN_SAFE;
     }
@@ -179,7 +187,16 @@ static void LCDCommunication(void)
         CommLCDConnectAlive();
         CommLCDStateMachine(STANDBY_STATE);
         CommLCDLoad(Load_On_Off_Signal, Load_Level_Signal);  // Gửi giá trị on/off tải và mức tải 
-        CommLCDThrottle(Throttle_ADC*100/4096);                       // Gửi giá trị tay ga 
+        CommLCDThrottle(Throttle_ADC*100/4096);                       // Gửi giá trị tay ga
+
+        if (UIConnectionStatus == CONNECTED)
+        {
+            CommLCDUIConnectionStatus(CONNECTED);
+        }
+        else
+        {
+            CommLCDUIConnectionStatus(DISCONNECT);
+        }
 
     }
 
@@ -204,35 +221,17 @@ static void UISend(void)
 
 static void UIReceive(void)
 {
-    if (Count > 0)
+    if (TryDecodePacket() == 1)
     {
-        if (TryDecodePacket() == 1)
-        {
-            ProcessPacket();
-        }
+        ProcessPacket();
     }
 }
 
 // Điều khiển mô hình
 static void SystemControl(void)
 {
-
-    // Điều khiển tay ga
-	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 620);
-
-
-    // Công tắt bật tải
-	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_RESET);
-
-
-    // Công tắt mức tải
-   // Mức tải 1
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-
-
+    SetMotor(MIN_DAC_MOTOR);    // Điều khiển tay ga
+    SetLoad(LOAD_0);            // Điều khiển tải
 }
 //========================================================================================
 

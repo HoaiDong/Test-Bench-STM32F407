@@ -1,5 +1,6 @@
 #include "Packet.h"
 #include <string.h>
+#include "stm32f4xx.h"
 
 uint8_t DataFrame[BUFFER_SIZE]; // Bộ đệm lưu trữ packet data lấy được từ buffer để xử lý
 
@@ -74,22 +75,23 @@ void EnqueueBuffer(uint8_t data)
         HeadBuffer = (HeadBuffer + 1) % BUFFER_SIZE;
         Count++;
     }
-    else
-    {
-    	HeadBuffer = 0;  // Thể hiện vị trí tiếp theo trong buffer để nhận data
-    	TailBuffer = 0;  // Thể hiện vị trí data cũ nhất trong buffer
-    	Count = 0; // Số lượng byte có trong buffer
-    }
 }
 
-// Lấy 1 data từ Circular Buffer ra
+// Lấy 1 byte data từ Circular Buffer ra
 uint8_t DequeueBuffer(void)  
 {
     if (IsBufferEmpty() == 0)
     {
         uint8_t Value = CircularBuffer[TailBuffer];
         TailBuffer = (TailBuffer + 1) % BUFFER_SIZE;
+
+
+        // Tránh trường hợp race condition (quan trọng)
+        HAL_NVIC_DisableIRQ(USART2_IRQn);  // Tắt riêng ngắt USART2
         Count--;
+        HAL_NVIC_EnableIRQ(USART2_IRQn);   // Bật lại ngắt USART2
+
+
         return Value;
     }
 }
@@ -102,7 +104,7 @@ uint16_t CRC16(uint16_t Tail, uint32_t len)
   for (uint32_t i = 0; i < len; i++)
   {
 	  CheckSum = CRC16Tabble[(((CheckSum >> 8) ^ CircularBuffer[Tail]) & 0xFF)] ^ (CheckSum << 8);
-    Tail = (Tail + 1) % BUFFER_SIZE;
+	  Tail = (Tail + 1) % BUFFER_SIZE;
   }
   return CheckSum;
 }
@@ -111,27 +113,35 @@ uint16_t CRC16(uint16_t Tail, uint32_t len)
 //Hàm kiểm tra frame của data nhận về có đúng không để xử lý
 int16_t TryDecodePacket(void) 
 {
+	// Không có data thì thoát
+	if (Count < 1) return -1;
+
   uint8_t DataStart = CircularBuffer[TailBuffer];   // Lấy giá trị start byte của frame
 
   // Start byte không hợp lệ sẽ end hàm
-  if (DataStart != 2) 
+  if (DataStart != 0x02) 
   {
+    DequeueBuffer();
     return -1;
   }
 
+  // Cần ít nhất 2 byte để đọc length
+  if (Count < 2) return -2;
+
+
   uint16_t DataLength = 0;  // Giá trị Lenght Byte
   // Lấy giá trị Length Byte
-  if (DataStart == 2) 
-  {
-    DataLength = (uint16_t)CircularBuffer[(TailBuffer + 1) % BUFFER_SIZE];  // Lấy giá trị Length Byte
+  DataLength = (uint16_t)CircularBuffer[(TailBuffer + 1) % BUFFER_SIZE];  // Lấy giá trị Length Byte
 
-    // End hàm nếu như giá trị Length đó < 1, không có byte nào hết
-    if (DataLength < 1) 
-    {
-    				return -1;
-    }
+  // End hàm nếu như giá trị Length đó < 1, không có byte nào hết
+  if (DataLength < 1)
+  {
+    DequeueBuffer();
+    return -1;
   }
 
+
+  // Chưa đủ data để check full frame
   // Số lượng byte hiện có phải nhiều hơn số lượng byte của 1 data frame thì mới cho kiểm tra tiếp 
   if (Count < DataLength + 5)
   {
@@ -139,9 +149,10 @@ int16_t TryDecodePacket(void)
   }
 
   // Kiểm tra End Byte có hợp lệ không, nếu không thì end hàm với End Byte có giá trị 0x03
-  if (CircularBuffer[(TailBuffer + DataStart + DataLength + 2) % BUFFER_SIZE] != 3) 
+  if (CircularBuffer[(TailBuffer + DataStart + DataLength + 2) % BUFFER_SIZE] != 0x03) 
   {
-      return -1;
+	  DequeueBuffer();
+    return -1;
   }
 
   // Xử dụng hàm CRC16 để tính giá trị crc cho data nhận được trong frame
